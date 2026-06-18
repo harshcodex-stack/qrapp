@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>CheckIn</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --accent: #6c63ff; --accent-dim: rgba(108,99,255,0.15);
+    --text: #f0f0f4; --text2: #9195a8; --text3: #5a5e72;
+    --green: #22c55e; --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444; --red-dim: rgba(239,68,68,0.12);
+    --amber: #f59e0b; --amber-dim: rgba(245,158,11,0.12);
+    --radius: 12px; --radius-sm: 8px;
+  }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif; font-size:16px; line-height:1.5; -webkit-tap-highlight-color:transparent; overflow:hidden; }
+  .app { display:flex; flex-direction:column; height:100vh; max-width:480px; margin:0 auto; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:0.5px solid var(--border); background:var(--bg); flex-shrink:0; }
+  .header-title { font-size:20px; font-weight:600; letter-spacing:-0.3px; }
+  .header-title span { color:var(--accent); }
+  .pin-btn { background:transparent; border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text2); font-size:13px; padding:6px 12px; cursor:pointer; }
+  .nav { display:flex; background:var(--surface); border-bottom:0.5px solid var(--border); flex-shrink:0; }
+  .nav-tab { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:10px 0; font-size:11px; font-weight:500; color:var(--text3); cursor:pointer; border:none; background:transparent; letter-spacing:0.3px; text-transform:uppercase; }
+  .nav-tab svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .nav-tab.active { color:var(--accent); }
+  .page { display:none; flex:1; overflow-y:auto; overflow-x:hidden; padding:20px; flex-direction:column; gap:16px; }
+  .page.active { display:flex; }
+  .scanner-box { position:relative; background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius); overflow:hidden; width:100%; aspect-ratio:1; }
+  #reader { width:100% !important; }
+  #reader video { width:100% !important; height:100% !important; display:block; object-fit:cover; }
+  #reader img, #reader__dashboard_section_csr, #reader__scan_region_label, #reader__header_message, #reader__filescan_input { display:none !important; }
+  #reader__scan_region { padding:0 !important; border:none !important; }
+  .scan-overlay { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+  .scan-frame { width:55%; aspect-ratio:1; position:relative; }
+  .scan-frame::before,.scan-frame::after,.scan-frame span::before,.scan-frame span::after { content:''; position:absolute; width:24px; height:24px; border-color:var(--accent); border-style:solid; }
+  .scan-frame::before { top:0; left:0; border-width:2px 0 0 2px; border-radius:4px 0 0 0; }
+  .scan-frame::after { top:0; right:0; border-width:2px 2px 0 0; border-radius:0 4px 0 0; }
+  .scan-frame span::before { bottom:0; left:0; border-width:0 0 2px 2px; border-radius:0 0 0 4px; }
+  .scan-frame span::after { bottom:0; right:0; border-width:0 2px 2px 0; border-radius:0 0 4px 0; }
+  .scan-hint { text-align:center; font-size:13px; color:var(--text3); line-height:1.5; }
+  .start-btn { background:var(--accent); color:#fff; border:none; border-radius:var(--radius); padding:14px; font-size:15px; font-weight:600; cursor:pointer; width:100%; }
+  .start-btn:active { opacity:0.88; }
+  .start-btn.stop { background:var(--surface2); color:var(--red); border:0.5px solid var(--border2); }
+  .result-card { border-radius:var(--radius); padding:14px 16px; display:flex; align-items:flex-start; gap:12px; border:0.5px solid var(--border2); animation:slideIn 0.2s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .result-card.success { background:var(--green-dim); border-color:rgba(34,197,94,0.25); }
+  .result-card.warning { background:var(--amber-dim); border-color:rgba(245,158,11,0.25); }
+  .result-card.error { background:var(--red-dim); border-color:rgba(239,68,68,0.25); }
+  .result-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; }
+  .result-name { font-size:15px; font-weight:600; margin-bottom:2px; }
+  .result-meta { font-size:12px; color:var(--text2); }
+  .https-banner { background:rgba(245,158,11,0.12); border:0.5px solid rgba(245,158,11,0.3); border-radius:var(--radius-sm); padding:12px 14px; font-size:12px; color:var(--amber); line-height:1.7; display:none; }
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat-card { background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center; }
+  .stat-num { font-size:22px; font-weight:600; line-height:1.2; }
+  .stat-num.green{color:var(--green)} .stat-num.amber{color:var(--amber)} .stat-num.accent{color:var(--accent)}
+  .stat-label { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+  .section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+  .section-title { font-size:13px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+  .search-row { display:flex; gap:8px; }
+  .search-input { flex:1; background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text); font-size:14px; padding:9px 12px; outline:none; }
+  .search-input:focus { border-color:var(--accent); }
+  .search-input::placeholder { color:var(--text3); }
+  .filter-btn { background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text2); padding:9px 12px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .filter-btn.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .records-list { display:flex; flex-direction:column; gap:8px; }
+  .record-row { background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .record-row:active { background:var(--surface2); }
+  .record-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; flex-shrink:0; }
+  .av-green{background:var(--green-dim);color:var(--green)} .av-gray{background:var(--surface2);color:var(--text3)}
+  .record-info { flex:1; min-width:0; }
+  .record-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .record-sub { font-size:11px; color:var(--text3); margin-top:1px; }
+  .badge { font-size:10px; font-weight:600; padding:3px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:0.4px; flex-shrink:0; }
+  .badge-green{background:var(--green-dim);color:var(--green)} .badge-gray{background:var(--surface2);color:var(--text3)}
+  .empty-state { text-align:center; padding:40px 20px; color:var(--text3); font-size:14px; }
+  .export-card { background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); padding:18px; display:flex; flex-direction:column; gap:12px; }
+  .export-title { font-size:15px; font-weight:600; }
+  .export-desc { font-size:13px; color:var(--text2); line-height:1.5; }
+  .export-btn { background:var(--surface2); border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text); font-size:14px; font-weight:500; padding:12px 16px; cursor:pointer; display:flex; align-items:center; gap:10px; width:100%; }
+  .export-btn:active { opacity:0.8; }
+  .export-btn svg { width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .export-btn span{flex:1} .export-btn small{font-size:11px;color:var(--text3)}
+  .danger-zone { background:var(--red-dim); border:0.5px solid rgba(239,68,68,0.2); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .danger-title{font-size:13px;font-weight:600;color:var(--red)} .danger-desc{font-size:12px;color:var(--text2)}
+  .danger-btn { background:transparent; border:0.5px solid rgba(239,68,68,0.4); border-radius:var(--radius-sm); color:var(--red); font-size:13px; padding:9px 14px; cursor:pointer; }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius); padding:24px; width:300px; display:flex; flex-direction:column; gap:16px; }
+  .modal-title{font-size:16px;font-weight:600} .modal-desc{font-size:13px;color:var(--text2)}
+  .pin-display { display:flex; gap:10px; justify-content:center; margin:4px 0; }
+  .pin-dot { width:14px; height:14px; border-radius:50%; border:1.5px solid var(--border2); background:transparent; transition:background 0.1s; }
+  .pin-dot.filled { background:var(--accent); border-color:var(--accent); }
+  .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .key { background:var(--surface2); border:0.5px solid var(--border); border-radius:var(--radius-sm); color:var(--text); font-size:18px; font-weight:500; padding:14px; cursor:pointer; text-align:center; }
+  .key:active{transform:scale(0.93);background:var(--accent-dim)}
+  .key.del{font-size:14px;color:var(--text2)} .key.empty{background:transparent;border-color:transparent;pointer-events:none}
+  .modal-error{font-size:12px;color:var(--red);text-align:center;min-height:16px}
+  .detail-modal { background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius); padding:20px; width:320px; display:flex; flex-direction:column; gap:12px; max-width:90vw; }
+  .detail-header{display:flex;align-items:center;gap:12px}
+  .detail-avatar { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; flex-shrink:0; }
+  .detail-row { display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:0.5px solid var(--border); }
+  .detail-row:last-of-type{border-bottom:none}
+  .detail-label{color:var(--text2)} .detail-value{font-weight:500;max-width:180px;text-align:right;word-break:break-all}
+  .close-btn { background:var(--surface2); border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text2); font-size:13px; padding:10px; cursor:pointer; }
+  .add-form{display:flex;flex-direction:column;gap:10px}
+  .form-label{font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;display:block}
+  .form-input { background:var(--surface2); border:0.5px solid var(--border2); border-radius:var(--radius-sm); color:var(--text); font-size:14px; padding:10px 12px; outline:none; width:100%; }
+  .form-input:focus{border-color:var(--accent)}
+  .add-btn { background:var(--accent); border:none; border-radius:var(--radius-sm); color:#fff; font-size:14px; font-weight:600; padding:11px; cursor:pointer; width:100%; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-title">Check<span>In</span></div>
+    <button class="pin-btn" id="adminBtn">Admin panel</button>
+  </div>
+  <nav class="nav">
+    <button class="nav-tab active" data-page="scan" id="tab-scan">
+      <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+      Scanner
+    </button>
+    <button class="nav-tab" data-page="dashboard" id="tab-dashboard">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-tab" data-page="export" id="tab-export">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Export
+    </button>
+    <button class="nav-tab" data-page="setup" id="tab-setup">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Users
+    </button>
+  </nav>
+
+  <div class="page active" id="page-scan">
+    <div class="https-banner" id="httpsBanner">
+      &#9888; Camera needs HTTPS or localhost. See setup instructions below.
+      <br>Easiest option: put this file on a PC and run <strong>npx serve .</strong> then open the local IP on Android.
+    </div>
+    <div class="scanner-box">
+      <div id="reader"></div>
+      <div class="scan-overlay"><div class="scan-frame"><span></span></div></div>
+    </div>
+    <p class="scan-hint">Tap "Start camera" and point at a check-in QR code. Requires HTTPS or localhost.</p>
+    <button class="start-btn" id="scanToggle">Start camera</button>
+    <div id="resultArea"></div>
+  </div>
+
+  <div class="page" id="page-dashboard">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-num accent" id="statTotal">0</div><div class="stat-label">Total</div></div>
+      <div class="stat-card"><div class="stat-num green" id="statIn">0</div><div class="stat-label">Checked in</div></div>
+      <div class="stat-card"><div class="stat-num amber" id="statRemaining">0</div><div class="stat-label">Remaining</div></div>
+    </div>
+    <div class="section-head"><span class="section-title">Records</span></div>
+    <div class="search-row">
+      <input class="search-input" id="searchInput" type="search" placeholder="Search name or ID">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="in">In</button>
+      <button class="filter-btn" data-filter="out">Out</button>
+    </div>
+    <div class="records-list" id="recordsList"></div>
+  </div>
+
+  <div class="page" id="page-export">
+    <div class="export-card">
+      <div class="export-title">Export check-in data</div>
+      <div class="export-desc">Download records stored on this device.</div>
+      <button class="export-btn" id="exportCSV">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M8 13h8M8 17h5"/></svg>
+        <span>Export as CSV</span><small>Spreadsheet-ready</small>
+      </button>
+      <button class="export-btn" id="exportJSON">
+        <svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+        <span>Export as JSON</span><small>Full backup</small>
+      </button>
+    </div>
+    <div class="danger-zone">
+      <div class="danger-title">Danger zone</div>
+      <div class="danger-desc">Clears all check-in records but keeps the user list. Cannot be undone.</div>
+      <button class="danger-btn" id="resetCheckins">Reset all check-ins</button>
+    </div>
+  </div>
+
+  <div class="page" id="page-setup">
+    <div class="export-card">
+      <div class="export-title">Add user and generate QR</div>
+      <div class="export-desc">Register a person and download their QR code to print or share.</div>
+      <div class="add-form">
+        <div><label class="form-label">Full name</label><input class="form-input" id="addName" placeholder="e.g. Samantha Perera" type="text"></div>
+        <div><label class="form-label">Department / role</label><input class="form-input" id="addDept" placeholder="e.g. Engineering" type="text"></div>
+        <div><label class="form-label">Employee ID (auto-generated if blank)</label><input class="form-input" id="addId" placeholder="e.g. EMP-001" type="text"></div>
+        <button class="add-btn" id="addUserBtn">Generate QR code</button>
+      </div>
+      <div id="qrOutput" style="display:none; text-align:center;">
+        <div style="font-size:13px; color:var(--text2); margin-bottom:10px;" id="qrLabel"></div>
+        <canvas id="qrCanvas" style="border-radius:8px; background:#fff; padding:10px; max-width:200px; display:inline-block;"></canvas>
+        <div style="margin-top:12px;">
+          <button class="export-btn" id="downloadQR" style="justify-content:center;">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            <span>Download QR as PNG</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div style="background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius); padding:16px;">
+      <div class="section-head" style="margin-bottom:10px;">
+        <span class="section-title">Registered users</span>
+        <span id="userCount" style="font-size:12px; color:var(--text3);">0 users</span>
+      </div>
+      <div class="records-list" id="usersList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pinOverlay">
+  <div class="modal">
+    <div class="modal-title">Admin access</div>
+    <div class="modal-desc">Enter the 4-digit PIN (default: 1234)</div>
+    <div class="pin-display">
+      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="modal-error" id="pinError"></div>
+    <div class="keypad">
+      <button class="key" data-k="1">1</button><button class="key" data-k="2">2</button><button class="key" data-k="3">3</button>
+      <button class="key" data-k="4">4</button><button class="key" data-k="5">5</button><button class="key" data-k="6">6</button>
+      <button class="key" data-k="7">7</button><button class="key" data-k="8">8</button><button class="key" data-k="9">9</button>
+      <button class="key empty"></button><button class="key" data-k="0">0</button><button class="key del" data-k="del">&#9003;</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detailOverlay">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <div class="detail-avatar" id="detailAv"></div>
+      <div><div style="font-size:16px;font-weight:600;" id="detailName"></div><div style="font-size:12px;color:var(--text2);" id="detailDept"></div></div>
+    </div>
+    <div id="detailRows"></div>
+    <button class="close-btn" id="closeDetail">Close</button>
+  </div>
+</div>
+
+<script>
+// ── Inline QR Code generator (no CDN needed) ────────────────────────────────
+// Minimal QR encoder — works fully offline
+(function(g){var a={stringToBytes:function(s){var b=[];for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);if(c<128)b.push(c);else if(c<2048)b.push((c>>6)|192,(c&63)|128);else b.push((c>>12)|224,((c>>6)&63)|128,(c&63)|128);}return b;}};
+var EC={L:{bit:1},M:{bit:0},Q:{bit:3},H:{bit:2}};
+var PATTERN_POS=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]];
+var G15=(1<<10)|(1<<8)|(1<<5)|(1<<4)|(1<<2)|(1<<1)|(1<<0),G18=(1<<12)|(1<<11)|(1<<10)|(1<<9)|(1<<8)|(1<<5)|(1<<2)|(1<<0),G15M=(1<<14)|(1<<12)|(1<<10)|(1<<4)|(1<<1);
+function bchDig(n){var d=0;while(n){d++;n>>>=1;}return d;}
+function bchTI(d){var b=d<<10;while(bchDig(b)-bchDig(G15)>=0)b^=G15<<(bchDig(b)-bchDig(G15));return(d<<10)|b^G15M;}
+function bchTN(d){var b=d<<12;while(bchDig(b)-bchDig(G18)>=0)b^=G18<<(bchDig(b)-bchDig(G18));return(d<<12)|b;}
+var EXP_T=new Array(256),LOG_T=new Array(256);
+(function(){for(var i=0;i<8;i++)EXP_T[i]=1<<i;for(var i=8;i<256;i++)EXP_T[i]=EXP_T[i-4]^EXP_T[i-5]^EXP_T[i-6]^EXP_T[i-8];for(var i=0;i<255;i++)LOG_T[EXP_T[i]]=i;})();
+function gexp(n){while(n<0)n+=255;while(n>=256)n-=255;return EXP_T[n];}
+function glog(n){if(n<1)throw 0;return LOG_T[n];}
+function Poly(n,s){var c=0;while(c<n.length&&n[c]==0)c++;this.n=new Array(n.length-c+s);for(var i=0;i<n.length-c;i++)this.n[i]=n[i+c];}
+Poly.prototype.get=function(i){return this.n[this.n.length-1-i];};
+Poly.prototype.len=function(){return this.n.length;};
+Poly.prototype.mul=function(o){var b=new Array(this.len()+o.len()-1);for(var i=0;i<this.len();i++)for(var j=0;j<o.len();j++)b[i+j]^=(glog(this.get(i))+glog(o.get(j))<=0?1:gexp(glog(this.get(i))+glog(o.get(j))));return new Poly(b,0);};
+Poly.prototype.mod=function(o){if(this.len()-o.len()<0)return this;var r=glog(this.get(this.len()-1))-glog(o.get(o.len()-1));var c=Array.from(this.n);for(var i=0;i<o.len();i++)c[this.len()-1-(this.len()-o.len()+i)]^=gexp(glog(o.get(o.len()-1-i))+r);return new Poly(c.reverse(),0).mod(o);};
+var ecPoly={};
+function getECP(n){if(ecPoly[n])return ecPoly[n];var p=new Poly([1],0);for(var i=0;i<n;i++)p=p.mul(new Poly([1,gexp(i)],0));return ecPoly[n]=p;}
+var RS_BT=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12]];
+function getRSB(t,ec){var tbl=RS_BT[(t-1)*4+(ec===EC.L?0:ec===EC.M?1:ec===EC.Q?2:3)];if(!tbl)throw 0;var r=[],d=tbl.length/3;for(var i=0;i<d;i++)for(var j=0;j<tbl[i*3];j++)r.push({tc:tbl[i*3+1],dc:tbl[i*3+2]});return r;}
+function BitBuf(){this.b=[];this.l=0;}
+BitBuf.prototype.put=function(n,c){for(var i=0;i<c;i++)this.putBit(((n>>>(c-i-1))&1)==1);};
+BitBuf.prototype.putBit=function(v){var b=Math.floor(this.l/8);if(this.b.length<=b)this.b.push(0);if(v)this.b[b]|=(0x80>>>(this.l%8));this.l++;};
+function getMask(p,r,c){switch(p){case 0:return(r+c)%2==0;case 1:return r%2==0;case 2:return c%3==0;case 3:return(r+c)%3==0;case 4:return(Math.floor(r/2)+Math.floor(c/3))%2==0;case 5:return(r*c)%2+(r*c)%3==0;case 6:return((r*c)%2+(r*c)%3)%2==0;case 7:return((r+c)%2+(r*c)%3)%2==0;}throw 0;}
+function lenBits(m,t){if(t<10){if(m==4)return 8;}else if(t<27){if(m==4)return 16;}else{if(m==4)return 16;}return 8;}
+function lostPt(qr){var n=qr.mc,s=0;for(var r=0;r<n;r++){for(var c=0;c<n;c++){var g=0,d=qr.m[r][c];for(var dr=-1;dr<=1;dr++){if(r+dr<0||n<=r+dr)continue;for(var dc=-1;dc<=1;dc++){if(c+dc<0||n<=c+dc)continue;if(dr==0&&dc==0)continue;if(d==qr.m[r+dr][c+dc])g++;}}if(g>5)s+=(3+g-5);}}for(var r=0;r<n-1;r++)for(var c=0;c<n-1;c++){var k=0;if(qr.m[r][c])k++;if(qr.m[r+1][c])k++;if(qr.m[r][c+1])k++;if(qr.m[r+1][c+1])k++;if(k==0||k==4)s+=3;}var dk=0;for(var c=0;c<n;c++)for(var r=0;r<n;r++)if(qr.m[r][c])dk++;s+=Math.abs(100*dk/n/n-50)/5*10;return s;}
+function QR(t,ec,text){this.t=t;this.ec=ec;this.mc=t*4+17;this.m=[];for(var i=0;i<this.mc;i++){this.m.push(new Array(this.mc).fill(null));}this.text=text;}
+QR.prototype.make=function(){var best=0,lp=Infinity;for(var p=0;p<8;p++){this._build(true,p);var l=lostPt(this);if(l<lp){lp=l;best=p;}}this._build(false,best);};
+QR.prototype._build=function(test,mask){var t=this.t;this.m=[];for(var i=0;i<this.mc;i++)this.m.push(new Array(this.mc).fill(null));this._probe(0,0);this._probe(this.mc-7,0);this._probe(0,this.mc-7);this._align();this._timing();this._typeInfo(test,mask);if(t>=7)this._typeNum(test);var data=this._createData();this._map(data,mask);};
+QR.prototype._probe=function(r,c){for(var dr=-1;dr<=7;dr++){if(r+dr<0||this.mc<=r+dr)continue;for(var dc=-1;dc<=7;dc++){if(c+dc<0||this.mc<=c+dc)continue;this.m[r+dr][c+dc]=((dr>=0&&dr<=6&&(dc==0||dc==6))||(dc>=0&&dc<=6&&(dr==0||dr==6))||(dr>=2&&dr<=4&&dc>=2&&dc<=4));}}};
+QR.prototype._align=function(){var p=PATTERN_POS[this.t-1];for(var i=0;i<p.length;i++)for(var j=0;j<p.length;j++){var r=p[i],c=p[j];if(this.m[r][c]!=null)continue;for(var dr=-2;dr<=2;dr++)for(var dc=-2;dc<=2;dc++)this.m[r+dr][c+dc]=(dr==-2||dr==2||dc==-2||dc==2||dr==0&&dc==0);}};
+QR.prototype._timing=function(){for(var i=8;i<this.mc-8;i++){if(this.m[i][6]==null)this.m[i][6]=(i%2==0);if(this.m[6][i]==null)this.m[6][i]=(i%2==0);}};
+QR.prototype._typeInfo=function(test,mask){var d=bchTI(this.ec.bit<<3|mask);for(var i=0;i<15;i++){var v=(!test&&((d>>i)&1)==1);if(i<6)this.m[i][8]=v;else if(i<8)this.m[i+1][8]=v;else this.m[this.mc-15+i][8]=v;}for(var i=0;i<15;i++){var v=(!test&&((d>>i)&1)==1);if(i<8)this.m[8][this.mc-i-1]=v;else if(i<9)this.m[8][15-i-1+1]=v;else this.m[8][15-i-1]=v;}this.m[this.mc-8][8]=!test;};
+QR.prototype._typeNum=function(test){var d=bchTN(this.t);for(var i=0;i<18;i++){var v=(!test&&((d>>i)&1)==1);this.m[Math.floor(i/3)][i%3+this.mc-8-3]=v;this.m[i%3+this.mc-8-3][Math.floor(i/3)]=v;}};
+QR.prototype._createData=function(){var rsb=getRSB(this.t,this.ec),buf=new BitBuf(),bytes=a.stringToBytes(this.text);buf.put(4,4);buf.put(bytes.length,lenBits(4,this.t));for(var i=0;i<bytes.length;i++)buf.put(bytes[i],8);var total=0;for(var i=0;i<rsb.length;i++)total+=rsb[i].dc;if(buf.l+4<=total*8)buf.put(0,4);while(buf.l%8!=0)buf.putBit(false);while(buf.l<total*8){buf.put(0xEC,8);if(buf.l>=total*8)break;buf.put(0x11,8);}
+var dbs=[],ecbs=[];for(var i=0;i<rsb.length;i++){var dc=rsb[i].dc,tc=rsb[i].tc,off=dbs.reduce(function(s,a){return s+a.length;},0);var db=buf.b.slice(off,off+dc);dbs.push(db);var p=new Poly(db,tc-dc);var ec2=getECP(tc-dc);var rem=p.mod(ec2);var ecb=new Array(tc-dc);for(var j=0;j<ecb.length;j++)ecb[j]=j<rem.len()?rem.get(j):0;ecbs.push(ecb);}
+var out=[],mxd=Math.max.apply(null,dbs.map(function(d){return d.length;})),mxe=Math.max.apply(null,ecbs.map(function(e){return e.length;}));for(var i=0;i<mxd;i++)for(var j=0;j<dbs.length;j++)if(i<dbs[j].length)out.push(dbs[j][i]);for(var i=0;i<mxe;i++)for(var j=0;j<ecbs.length;j++)if(i<ecbs[j].length)out.push(ecbs[j][i]);return out;};
+QR.prototype._map=function(data,mp){var dir=-1,row=this.mc-1,idx=0;for(var col=this.mc-1;col>0;col-=2){if(col==6)col--;while(true){for(var i=0;i<2;i++){if(this.m[row][col-i]==null){var v=false;if(idx<data.length)v=((data[Math.floor(idx/8)]>>>(7-idx%8))&1)==1;if(getMask(mp,row,col-i))v=!v;this.m[row][col-i]=v;idx++;}}row+=dir;if(row<0||this.mc<=row){row-=dir;dir=-dir;break;}}}};
+g.QRCode={toCanvas:function(canvas,text,opts){var o=opts||{},sz=o.width||200,mg=o.margin===undefined?2:o.margin,dark=o.darkColor||'#000',light=o.lightColor||'#fff';var t=0;for(var i=1;i<=12;i++){try{var q=new QR(i,EC.M,text);q.make();t=i;break;}catch(e){}}if(!t){canvas.width=sz;canvas.height=sz;return;}var q=new QR(t,EC.M,text);q.make();var mc=q.mc,cell=Math.floor((sz-mg*2)/mc),cs=cell*mc+mg*2;canvas.width=cs;canvas.height=cs;var ctx=canvas.getContext('2d');ctx.fillStyle=light;ctx.fillRect(0,0,cs,cs);ctx.fillStyle=dark;for(var r=0;r<mc;r++)for(var c=0;c<mc;c++)if(q.m[r][c])ctx.fillRect(c*cell+mg,r*cell+mg,cell,cell);},toDataURL:function(text,opts){var c=document.createElement('canvas');this.toCanvas(c,text,opts);return c.toDataURL('image/png');}};
+})(window);
+
+// ── IndexedDB ───────────────────────────────────────────────────────────────
+var db;
+function openDB(){return new Promise(function(res,rej){var req=indexedDB.open('checkin_db',1);req.onupgradeneeded=function(e){var d=e.target.result;if(!d.objectStoreNames.contains('users'))d.createObjectStore('users',{keyPath:'id'});if(!d.objectStoreNames.contains('checkins')){var cs=d.createObjectStore('checkins',{keyPath:'id',autoIncrement:true});cs.createIndex('userId','userId',{unique:false});}};req.onsuccess=function(e){db=e.target.result;res(db);};req.onerror=function(e){rej(e);};});}
+function tx(s,m){return db.transaction(s,m||'readonly').objectStore(s);}
+function dbGetAll(s){return new Promise(function(res,rej){var r=tx(s).getAll();r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+function dbGet(s,k){return new Promise(function(res,rej){var r=tx(s).get(k);r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+function dbPut(s,o){return new Promise(function(res,rej){var r=tx(s,'readwrite').put(o);r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+function dbDelete(s,k){return new Promise(function(res,rej){var r=tx(s,'readwrite').delete(k);r.onsuccess=function(){res();};r.onerror=function(){rej(r.error);};});}
+function dbClear(s){return new Promise(function(res,rej){var r=tx(s,'readwrite').clear();r.onsuccess=function(){res();};r.onerror=function(){rej(r.error);};});}
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+var ADMIN_PIN='1234',adminUnlocked=false,pinBuffer='',pendingPage=null;
+var PROTECTED=['dashboard','export','setup'];
+function showPin(page){pendingPage=page;pinBuffer='';updateDots();document.getElementById('pinError').textContent='';document.getElementById('pinOverlay').classList.add('open');}
+function updateDots(){for(var i=0;i<4;i++)document.getElementById('pd'+i).classList.toggle('filled',i<pinBuffer.length);}
+document.querySelectorAll('.key').forEach(function(k){k.addEventListener('click',function(){var v=k.dataset.k;if(v==='del')pinBuffer=pinBuffer.slice(0,-1);else if(pinBuffer.length<4)pinBuffer+=v;updateDots();if(pinBuffer.length===4){setTimeout(function(){if(pinBuffer===ADMIN_PIN){adminUnlocked=true;document.getElementById('pinOverlay').classList.remove('open');document.getElementById('adminBtn').textContent='Lock admin';if(pendingPage)switchPage(pendingPage);}else{document.getElementById('pinError').textContent='Incorrect PIN.';pinBuffer='';updateDots();}},100);}});});
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+function switchPage(name){
+  if(PROTECTED.includes(name)&&!adminUnlocked){showPin(name);return;}
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.nav-tab').forEach(function(t){t.classList.remove('active');});
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='dashboard')renderDashboard();
+  if(name==='setup')renderUsers();
+}
+document.querySelectorAll('.nav-tab').forEach(function(t){t.addEventListener('click',function(){switchPage(t.dataset.page);});});
+document.getElementById('adminBtn').addEventListener('click',function(){
+  if(adminUnlocked){adminUnlocked=false;document.getElementById('adminBtn').textContent='Admin panel';switchPage('scan');}
+  else showPin('dashboard');
+});
+
+// ── Scanner ─────────────────────────────────────────────────────────────────
+var scanner=null,scanning=false,lastScan='',lastScanTime=0;
+if(location.protocol!=='https:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
+  document.getElementById('httpsBanner').style.display='block';
+}
+document.getElementById('scanToggle').addEventListener('click',function(){
+  if(!scanning)startScanner();else stopScanner();
+});
+function startScanner(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showResult('error','!','Camera unavailable','This page must be served over HTTPS. See the banner above.');
+    return;
+  }
+  scanning=true;
+  document.getElementById('scanToggle').textContent='Stop camera';
+  document.getElementById('scanToggle').classList.add('stop');
+  if(typeof Html5Qrcode==='undefined'){
+    var s=document.createElement('script');
+    s.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload=function(){initScanner();};
+    s.onerror=function(){showResult('error','!','Load error','Could not load scanner. Check internet connection.');resetScanBtn();};
+    document.head.appendChild(s);
+  } else {initScanner();}
+}
+function initScanner(){
+  scanner=new Html5Qrcode('reader');
+  scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:220,height:220},aspectRatio:1.0},onScanSuccess,function(){}).catch(function(err){
+    var msg=String(err&&err.message?err.message:err);
+    if(/permission|notallowed/i.test(msg))msg='Camera permission denied. Tap your browser address bar, allow camera, then try again.';
+    else if(/https|secure/i.test(msg))msg='Camera requires HTTPS. See the banner above for setup.';
+    else msg='Could not start camera: '+msg;
+    showResult('error','!','Camera error',msg);
+    resetScanBtn();
+  });
+}
+function stopScanner(){if(scanner)scanner.stop().catch(function(){}).finally(function(){scanner=null;});resetScanBtn();}
+function resetScanBtn(){scanning=false;document.getElementById('scanToggle').textContent='Start camera';document.getElementById('scanToggle').classList.remove('stop');}
+function onScanSuccess(raw){
+  var now=Date.now();
+  if(raw===lastScan&&now-lastScanTime<3000)return;
+  lastScan=raw;lastScanTime=now;
+  var payload;
+  try{payload=JSON.parse(raw);}catch(e){payload={id:raw,name:raw,dept:''};}
+  var userId=payload.id;
+  dbGet('users',userId).then(function(user){
+    if(!user){showResult('error','!','Unknown QR','This ID is not registered.');return;}
+    dbGetAll('checkins').then(function(checkins){
+      var today=new Date().toDateString();
+      var todayIn=checkins.find(function(c){return c.userId===userId&&new Date(c.time).toDateString()===today;});
+      if(todayIn){showResult('warning','~',user.name,'Already checked in at '+fmt(todayIn.time));return;}
+      var rec={userId:userId,time:new Date().toISOString(),name:user.name,dept:user.dept};
+      dbPut('checkins',rec).then(function(){showResult('success','&#10003;',user.name,user.dept+' &middot; Checked in at '+fmt(rec.time));});
+    });
+  });
+}
+function fmt(iso){return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+function showResult(type,icon,name,meta){
+  var el=document.getElementById('resultArea');
+  el.innerHTML='<div class="result-card '+type+'"><div class="result-icon">'+icon+'</div><div><div class="result-name">'+name+'</div><div class="result-meta">'+meta+'</div></div></div>';
+  setTimeout(function(){if(el.firstChild)el.innerHTML='';},5000);
+}
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+var dashFilter='all',dashSearch='';
+document.querySelectorAll('.filter-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    dashFilter=btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    renderDashboard();
+  });
+});
+document.getElementById('searchInput').addEventListener('input',function(e){dashSearch=e.target.value.toLowerCase();renderDashboard();});
+function renderDashboard(){
+  Promise.all([dbGetAll('users'),dbGetAll('checkins')]).then(function(r){
+    var users=r[0],checkins=r[1];
+    var today=new Date().toDateString();
+    var todayC=checkins.filter(function(c){return new Date(c.time).toDateString()===today;});
+    var cIds=new Set(todayC.map(function(c){return c.userId;}));
+    document.getElementById('statTotal').textContent=users.length;
+    document.getElementById('statIn').textContent=cIds.size;
+    document.getElementById('statRemaining').textContent=Math.max(0,users.length-cIds.size);
+    var rows=users.map(function(u){return Object.assign({},u,{checkedIn:cIds.has(u.id),checkinTime:(todayC.find(function(c){return c.userId===u.id;})||{}).time||null});});
+    if(dashFilter==='in')rows=rows.filter(function(r){return r.checkedIn;});
+    if(dashFilter==='out')rows=rows.filter(function(r){return !r.checkedIn;});
+    if(dashSearch)rows=rows.filter(function(r){return r.name.toLowerCase().indexOf(dashSearch)>=0||r.id.toLowerCase().indexOf(dashSearch)>=0;});
+    var list=document.getElementById('recordsList');
+    if(!rows.length){list.innerHTML='<div class="empty-state"><div style="font-size:32px;margin-bottom:8px">&#128203;</div>No records match</div>';return;}
+    list.innerHTML=rows.map(function(r){
+      var init=r.name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
+      var badge=r.checkedIn?'<span class="badge badge-green">In '+fmt(r.checkinTime)+'</span>':'<span class="badge badge-gray">Pending</span>';
+      return '<div class="record-row" onclick="showDetail(\''+r.id+'\')"><div class="record-avatar '+(r.checkedIn?'av-green':'av-gray')+'">'+init+'</div><div class="record-info"><div class="record-name">'+r.name+'</div><div class="record-sub">'+r.dept+' &middot; '+r.id+'</div></div>'+badge+'</div>';
+    }).join('');
+  });
+}
+function showDetail(userId){
+  Promise.all([dbGet('users',userId),dbGetAll('checkins')]).then(function(r){
+    var user=r[0],checkins=r[1];
+    var uc=checkins.filter(function(c){return c.userId===userId;}).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
+    var today=new Date().toDateString();
+    var todayIn=uc.find(function(c){return new Date(c.time).toDateString()===today;});
+    var init=user.name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
+    document.getElementById('detailAv').textContent=init;
+    document.getElementById('detailAv').className='detail-avatar '+(todayIn?'av-green':'av-gray');
+    document.getElementById('detailName').textContent=user.name;
+    document.getElementById('detailDept').textContent=user.dept;
+    var recent=uc.slice(0,5).map(function(c){return '<div class="detail-row"><span class="detail-label">'+new Date(c.time).toLocaleDateString()+'</span><span class="detail-value">'+fmt(c.time)+'</span></div>';}).join('');
+    document.getElementById('detailRows').innerHTML=
+      '<div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">'+user.id+'</span></div>'+
+      '<div class="detail-row"><span class="detail-label">Status today</span><span class="detail-value" style="color:'+(todayIn?'var(--green)':'var(--amber)')+'">'+( todayIn?'Checked in':'Not yet')+'</span></div>'+
+      '<div class="detail-row"><span class="detail-label">Total check-ins</span><span class="detail-value">'+uc.length+'</span></div>'+
+      (recent?'<div style="font-size:12px;color:var(--text3);padding:6px 0 2px;">Recent activity</div>'+recent:'');
+    document.getElementById('detailOverlay').classList.add('open');
+  });
+}
+document.getElementById('closeDetail').addEventListener('click',function(){document.getElementById('detailOverlay').classList.remove('open');});
+
+// ── Export ──────────────────────────────────────────────────────────────────
+document.getElementById('exportCSV').addEventListener('click',function(){
+  Promise.all([dbGetAll('users'),dbGetAll('checkins')]).then(function(r){
+    var users=r[0],checkins=r[1];
+    var today=new Date().toDateString();
+    var cIds=new Set(checkins.filter(function(c){return new Date(c.time).toDateString()===today;}).map(function(c){return c.userId;}));
+    var rows=[['ID','Name','Department','Status Today','Last Check-in','Total Check-ins']];
+    users.forEach(function(u){
+      var uc=checkins.filter(function(c){return c.userId===u.id;}).sort(function(a,b){return new Date(b.time)-new Date(a.time);});
+      rows.push([u.id,u.name,u.dept,cIds.has(u.id)?'Checked In':'Pending',uc[0]?new Date(uc[0].time).toLocaleString():'Never',uc.length]);
+    });
+    var csv=rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+    dlFile('checkin-'+new Date().toISOString().slice(0,10)+'.csv',csv,'text/csv');
+  });
+});
+document.getElementById('exportJSON').addEventListener('click',function(){
+  Promise.all([dbGetAll('users'),dbGetAll('checkins')]).then(function(r){
+    dlFile('checkin-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({exportedAt:new Date().toISOString(),users:r[0],checkins:r[1]},null,2),'application/json');
+  });
+});
+function dlFile(name,text,mime){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime}));a.download=name;a.click();}
+document.getElementById('resetCheckins').addEventListener('click',function(){
+  if(confirm('Reset ALL check-in records? This cannot be undone.')){dbClear('checkins').then(function(){renderDashboard();alert('All check-ins cleared.');});}
+});
+
+// ── Users ────────────────────────────────────────────────────────────────────
+var lastUser=null;
+document.getElementById('addUserBtn').addEventListener('click',function(){
+  var name=document.getElementById('addName').value.trim();
+  var dept=document.getElementById('addDept').value.trim()||'General';
+  var id=document.getElementById('addId').value.trim()||('USR-'+Math.random().toString(36).slice(2,8).toUpperCase());
+  if(!name){alert('Please enter a name.');return;}
+  var user={id:id,name:name,dept:dept,createdAt:new Date().toISOString()};
+  dbPut('users',user).then(function(){
+    lastUser=user;
+    var payload=JSON.stringify({id:id,name:name,dept:dept});
+    document.getElementById('qrLabel').textContent=name+' \u00b7 '+id;
+    document.getElementById('qrOutput').style.display='block';
+    QRCode.toCanvas(document.getElementById('qrCanvas'),payload,{width:200,margin:2});
+    document.getElementById('addName').value='';
+    document.getElementById('addDept').value='';
+    document.getElementById('addId').value='';
+    renderUsers();
+  });
+});
+document.getElementById('downloadQR').addEventListener('click',function(){
+  if(!lastUser)return;
+  var a=document.createElement('a');
+  a.href=document.getElementById('qrCanvas').toDataURL('image/png');
+  a.download='qr-'+lastUser.id+'.png';a.click();
+});
+function renderUsers(){
+  dbGetAll('users').then(function(users){
+    document.getElementById('userCount').textContent=users.length+' user'+(users.length!==1?'s':'');
+    var list=document.getElementById('usersList');
+    if(!users.length){list.innerHTML='<div class="empty-state" style="padding:20px;font-size:13px;color:var(--text3)">No users yet. Add one above.</div>';return;}
+    list.innerHTML=users.map(function(u){
+      var init=u.name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
+      return '<div class="record-row"><div class="record-avatar av-gray">'+init+'</div><div class="record-info"><div class="record-name">'+u.name+'</div><div class="record-sub">'+u.dept+' &middot; '+u.id+'</div></div><button onclick="delUser(\''+u.id+'\')" style="background:transparent;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:4px 8px;line-height:1">&times;</button></div>';
+    }).join('');
+  });
+}
+function delUser(id){if(confirm('Remove this user?')){dbDelete('users',id).then(function(){renderUsers();renderDashboard();});}}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+openDB().then(function(){renderDashboard();renderUsers();});
+</script>
+</body>
+</html>
