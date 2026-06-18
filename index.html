@@ -30,18 +30,70 @@
   .nav-tab.active { color:var(--accent); }
   .page { display:none; flex:1; overflow-y:auto; overflow-x:hidden; padding:20px; flex-direction:column; gap:16px; }
   .page.active { display:flex; }
-  .scanner-box { position:relative; background:var(--surface); border:0.5px solid var(--border2); border-radius:var(--radius); overflow:hidden; width:100%; aspect-ratio:1; }
-  #reader { width:100% !important; }
-  #reader video { width:100% !important; height:100% !important; display:block; object-fit:cover; }
-  #reader img, #reader__dashboard_section_csr, #reader__scan_region_label, #reader__header_message, #reader__filescan_input { display:none !important; }
-  #reader__scan_region { padding:0 !important; border:none !important; }
-  .scan-overlay { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
-  .scan-frame { width:55%; aspect-ratio:1; position:relative; }
-  .scan-frame::before,.scan-frame::after,.scan-frame span::before,.scan-frame span::after { content:''; position:absolute; width:24px; height:24px; border-color:var(--accent); border-style:solid; }
-  .scan-frame::before { top:0; left:0; border-width:2px 0 0 2px; border-radius:4px 0 0 0; }
-  .scan-frame::after { top:0; right:0; border-width:2px 2px 0 0; border-radius:0 4px 0 0; }
-  .scan-frame span::before { bottom:0; left:0; border-width:0 0 2px 2px; border-radius:0 0 0 4px; }
-  .scan-frame span::after { bottom:0; right:0; border-width:0 2px 2px 0; border-radius:0 0 4px 0; }
+  /* ── Scanner box: iOS + Android compatible ── */
+  .scanner-box {
+    position: relative;
+    width: 100%;
+    /* padding-bottom trick is more reliable than aspect-ratio on iOS Safari */
+    height: 0;
+    padding-bottom: 100%;
+    background: #000;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  /* reader fills the box absolutely */
+  #reader {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* library injects this wrapper — force it to fill too */
+  #reader__scan_region {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  /* video must cover the square; object-fit:cover handles portrait camera on iOS */
+  #reader video {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+  }
+  /* hide every piece of the library's own UI — we draw our own overlay */
+  #reader img,
+  #reader__dashboard_section_csr,
+  #reader__scan_region_label,
+  #reader__header_message,
+  #reader__filescan_input,
+  #reader__dashboard,
+  #reader__scan_region__shaded_region { display: none !important; }
+  /* our overlay sits on top, also absolute inside scanner-box */
+  .scan-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* corner-marker frame — purely decorative, full frame is scanned */
+  .scan-frame { width: 60%; aspect-ratio: 1; position: relative; }
+  .scan-frame::before,.scan-frame::after,.scan-frame span::before,.scan-frame span::after {
+    content: ''; position: absolute; width: 28px; height: 28px;
+    border-color: var(--accent); border-style: solid;
+  }
+  .scan-frame::before  { top:0;    left:0;  border-width:3px 0 0 3px; border-radius:5px 0 0 0; }
+  .scan-frame::after   { top:0;    right:0; border-width:3px 3px 0 0; border-radius:0 5px 0 0; }
+  .scan-frame span::before { bottom:0; left:0;  border-width:0 0 3px 3px; border-radius:0 0 0 5px; }
+  .scan-frame span::after  { bottom:0; right:0; border-width:0 3px 3px 0; border-radius:0 0 5px 0; }
   .scan-hint { text-align:center; font-size:13px; color:var(--text3); line-height:1.5; }
   .start-btn { background:var(--accent); color:#fff; border:none; border-radius:var(--radius); padding:14px; font-size:15px; font-weight:600; cursor:pointer; width:100%; }
   .start-btn:active { opacity:0.88; }
@@ -191,8 +243,23 @@
   </div>
 
   <div class="page" id="page-setup">
+    <!-- Bulk Import Card -->
     <div class="export-card">
-      <div class="export-title">Add user and generate QR</div>
+      <div class="export-title">&#128196; Bulk import from Excel / CSV</div>
+      <div class="export-desc">Upload a spreadsheet with columns: <strong>Name</strong>, <strong>Department</strong>, <strong>Employee ID</strong> (optional). Row 1 is the header — data starts from row 2.</div>
+      <button class="export-btn" id="downloadTemplate">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        <span>Download template (.csv)</span><small>Opens in Excel &amp; Sheets</small>
+      </button>
+      <label class="add-btn" style="text-align:center;display:block;cursor:pointer;line-height:1.4;">
+        &#128196;&nbsp; Upload .xlsx / .xls / .csv
+        <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      </label>
+      <div id="bulkPreview" style="display:none;"></div>
+    </div>
+
+    <div class="export-card">
+      <div class="export-title">Add single user &amp; generate QR</div>
       <div class="export-desc">Register a person and download their QR code to print or share.</div>
       <div class="add-form">
         <div><label class="form-label">Full name</label><input class="form-input" id="addName" placeholder="e.g. Samantha Perera" type="text"></div>
@@ -217,6 +284,12 @@
         <span id="userCount" style="font-size:12px; color:var(--text3);">0 users</span>
       </div>
       <div class="records-list" id="usersList"></div>
+      <div style="margin-top:12px;">
+        <button class="export-btn" id="downloadAllQR" style="width:100%;justify-content:center;">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h7M14 17h7M14 20h7"/></svg>
+          <span id="downloadAllQRLabel">Download all QR codes as ZIP</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -341,7 +414,12 @@ function startScanner(){
 }
 function initScanner(){
   scanner=new Html5Qrcode('reader');
-  scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:220,height:220},aspectRatio:1.0},onScanSuccess,function(){}).catch(function(err){
+  scanner.start(
+    {facingMode:'environment'},
+    {fps:10},
+    onScanSuccess,
+    function(){}
+  ).catch(function(err){
     var msg=String(err&&err.message?err.message:err);
     if(/permission|notallowed/i.test(msg))msg='Camera permission denied. Tap your browser address bar, allow camera, then try again.';
     else if(/https|secure/i.test(msg))msg='Camera requires HTTPS. See the banner above for setup.';
@@ -506,6 +584,153 @@ function renderUsers(){
   });
 }
 function delUser(id){if(confirm('Remove this user?')){dbDelete('users',id).then(function(){renderUsers();renderDashboard();});}}
+
+// ── Bulk Import ──────────────────────────────────────────────────────────────
+document.getElementById('downloadTemplate').addEventListener('click',function(){
+  var csv='Name,Department,Employee ID\nJohn Perera,Engineering,EMP-001\nKamani Silva,HR,EMP-002\nNimal Fernando,Finance,EMP-003\n';
+  dlFile('checkin-employee-template.csv',csv,'text/csv');
+});
+
+document.getElementById('bulkFileInput').addEventListener('change',function(e){
+  var file=e.target.files[0];
+  if(!file)return;
+  document.getElementById('bulkPreview').innerHTML='<div style="color:var(--text2);font-size:13px;padding:6px 0;">Reading file...</div>';
+  document.getElementById('bulkPreview').style.display='block';
+  if(typeof XLSX==='undefined'){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=function(){parseBulkFile(file);};
+    s.onerror=function(){document.getElementById('bulkPreview').innerHTML='<div style="color:var(--red);font-size:13px;">Could not load Excel library. Check your internet connection.</div>';};
+    document.head.appendChild(s);
+  } else {
+    parseBulkFile(file);
+  }
+});
+
+function parseBulkFile(file){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=new Uint8Array(e.target.result);
+      var wb=XLSX.read(data,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var parsed=[];
+      for(var i=1;i<rows.length;i++){
+        var row=rows[i];
+        var name=String(row[0]||'').trim();
+        if(!name)continue;
+        var dept=String(row[1]||'').trim()||'General';
+        var id=String(row[2]||'').trim()||('USR-'+Math.random().toString(36).slice(2,8).toUpperCase());
+        parsed.push({name:name,dept:dept,id:id});
+      }
+      showBulkPreview(parsed);
+    } catch(err){
+      document.getElementById('bulkPreview').innerHTML='<div style="color:var(--red);font-size:13px;">Failed to parse file: '+err.message+'</div>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showBulkPreview(rows){
+  var el=document.getElementById('bulkPreview');
+  if(!rows.length){
+    el.innerHTML='<div style="color:var(--red);font-size:13px;padding:6px 0;">No valid rows found. Make sure: Column A = Name, Column B = Department, Column C = Employee ID (optional). Row 1 is the header.</div>';
+    return;
+  }
+  window._bulkRows=rows;
+  var show=rows.slice(0,5);
+  var html='<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+rows.length+' employee'+(rows.length>1?'s':'')+' found'+(rows.length>5?' &mdash; showing first 5':''+'.')+'</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;">';
+  show.forEach(function(r){
+    html+='<div style="background:var(--surface2);border-radius:6px;padding:8px 10px;font-size:12px;"><strong>'+r.name+'</strong> &middot; '+r.dept+' &middot; <span style="color:var(--accent);font-family:monospace;">'+r.id+'</span></div>';
+  });
+  html+='</div>';
+  html+='<button class="add-btn" id="importConfirmBtn" style="width:100%;">Import '+rows.length+' employee'+(rows.length>1?'s':'')+'</button>';
+  el.innerHTML=html;
+  el.style.display='block';
+  document.getElementById('importConfirmBtn').addEventListener('click',function(){
+    importBulkUsers(window._bulkRows);
+  });
+}
+
+function importBulkUsers(rows){
+  var btn=document.getElementById('importConfirmBtn');
+  btn.textContent='Importing...';
+  btn.disabled=true;
+  var promises=rows.map(function(r){
+    return dbPut('users',{id:r.id,name:r.name,dept:r.dept,createdAt:new Date().toISOString()});
+  });
+  Promise.all(promises).then(function(){
+    document.getElementById('bulkPreview').innerHTML='<div style="color:var(--green);font-size:13px;padding:8px 0;">&#10003; '+rows.length+' employees imported! You can now download all QR codes below.</div>';
+    document.getElementById('bulkFileInput').value='';
+    window._bulkRows=null;
+    renderUsers();
+    renderDashboard();
+  }).catch(function(err){
+    document.getElementById('bulkPreview').innerHTML='<div style="color:var(--red);font-size:13px;">Import failed: '+err+'</div>';
+  });
+}
+
+// ── Bulk QR ZIP Download ──────────────────────────────────────────────────────
+document.getElementById('downloadAllQR').addEventListener('click',function(){
+  dbGetAll('users').then(function(users){
+    if(!users.length){alert('No employees found. Please add employees first.');return;}
+    var btn=document.getElementById('downloadAllQR');
+    var lbl=document.getElementById('downloadAllQRLabel');
+    btn.disabled=true;
+    lbl.textContent='Loading libraries...';
+    var libs=[];
+    if(typeof qrcode==='undefined'){
+      libs.push(new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);}));
+    }
+    if(typeof JSZip==='undefined'){
+      libs.push(new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);}));
+    }
+    Promise.all(libs).then(function(){
+      generateQRZip(users);
+    }).catch(function(){
+      lbl.textContent='Download all QR codes as ZIP';
+      btn.disabled=false;
+      alert('Could not load required libraries. Please check your internet connection.');
+    });
+  });
+});
+
+function generateQRZip(users){
+  var btn=document.getElementById('downloadAllQR');
+  var lbl=document.getElementById('downloadAllQRLabel');
+  var zip=new JSZip();
+  var errors=[];
+  users.forEach(function(u,i){
+    try{
+      var canvas=document.createElement('canvas');
+      drawQRCanvas(canvas,JSON.stringify({id:u.id,name:u.name,dept:u.dept}));
+      var b64=canvas.toDataURL('image/png').split(',')[1];
+      // Filename: EmployeeID_Name.png — safe characters only
+      var safe=function(s){return String(s).replace(/[^a-zA-Z0-9\-_\.]/g,'_');};
+      var fname=safe(u.id)+'_'+safe(u.name)+'.png';
+      zip.file(fname,b64,{base64:true});
+      lbl.textContent='Generating... '+(i+1)+'/'+users.length;
+    }catch(e){
+      errors.push(u.name);
+    }
+  });
+  lbl.textContent='Creating ZIP...';
+  zip.generateAsync({type:'blob'}).then(function(blob){
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='qr-codes-all-'+new Date().toISOString().slice(0,10)+'.zip';
+    a.click();
+    lbl.textContent='Download all QR codes as ZIP';
+    btn.disabled=false;
+    if(errors.length)alert('Note: '+errors.length+' QR(s) failed to generate: '+errors.join(', '));
+  }).catch(function(err){
+    lbl.textContent='Download all QR codes as ZIP';
+    btn.disabled=false;
+    alert('ZIP creation failed: '+err);
+  });
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 openDB().then(function(){renderDashboard();renderUsers();});
